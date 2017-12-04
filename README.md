@@ -1,14 +1,23 @@
 # Gerrit integration for Slack
 
+## Notice
+
+This project is forked from [ddonahue99/gerrit-slack](https://github.com/ddonahue99/gerrit-slack) repository where the main difference is to send **Direct Message** instead of **Channel Message** in the most case.
+
 ## What is it?
 
 A daemon that sends updates to Slack channels as noteworthy events happen on Gerrit:
 
-  * Passing builds (except WIPs)
-  * Code/QA/Product reviews
+**Slack Direct Message**:
   * Comments
+  * `-1`,`-2`,`+1` & `+2` votes
+  * Builds results (Success/Failure)
+  * Code/QA/Product review
+  * Notify `-2` owner on new Patchset
+
+**Slack Channel Message**:
+  * New Reviews
   * Merges
-  * Failed builds (sent to owner via slackbot DM)
 
 ## Configuration
 
@@ -16,11 +25,11 @@ Sample configuration files are provided in `config`.
 
 ### slack.yml
 
-Configure your team name and Incoming Webhook integration token here.
+Configure your team name and Incoming Webhook integration URL here.
 
 ### gerrit.yml
 
-Set the SSH command used to monitor stream-events on gerrit.
+Set Gerrit URL and the SSH command used to monitor stream-events on gerrit.
 
 ### channels.yml
 
@@ -53,6 +62,7 @@ In order to ping a user on slack (e.g. for DMs on failed builds, or to @mention 
 ## Running the daemon
 
     bundle install
+    bundle update
     bin/gerrit-slack
 
 ## Development mode

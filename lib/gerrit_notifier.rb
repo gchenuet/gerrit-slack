@@ -51,13 +51,13 @@ class GerritNotifier
 
           if @@buffer.size > 0 && !ENV['DEVELOPMENT']
             @@buffer.each do |channel, messages|
-              notifier = Slack::Notifier.new slack_config['team'], slack_config['token']
-              notifier.ping(messages.join("\n\n"),
-                channel: channel,
-                username: 'gerrit',
-                icon_emoji: ':dragon_face:',
-                link_names: 1
-              )
+              notifier = Slack::Notifier.new slack_config['token']
+	      notifier.post(attachments: [messages[0]],
+	        channel: channel,
+		username: 'Gerrit',
+		mrkdwn: true,
+		link_names: 1
+	      )
             end
           end
 
@@ -96,45 +96,122 @@ class GerritNotifier
     # Jenkins update
     if update.jenkins?
       if update.build_successful? && !update.wip?
-        notify channels, "#{update.commit} *passed* Jenkins and is ready for *code review*"
+        content = {
+          text: "All checks have passed.",
+          title: "##{update.number}: #{update.commit_without_owner}",
+          color: "good",
+          mrkdwn_in: ["text"]
+        }
+        notify_user update.owner, content
       elsif update.build_failed? && !update.build_aborted?
-        notify_user update.owner, "#{update.commit_without_owner} *failed* on Jenkins"
+        content = {
+	  text: "All checks have failed.",
+          title: "##{update.number}: #{update.commit_without_owner}",
+          color: "danger",
+          mrkdwn_in: ["text"]
+        }
+        notify_user update.owner, content
       end
     end
 
     # Code review +2
     if update.code_review_approved?
-      notify channels, "#{update.author_slack_name} has *+2'd* #{update.commit}: ready for *QA*"
+      content = {
+	text: "#{update.author} (@#{update.author_slack_name}) has *+2* your review!",
+        title: "##{update.number}: #{update.commit_without_owner}",
+        color: "good",
+	mrkdwn_in: ["text"]
+      }
+      notify_user update.owner, content
     end
 
     # Code review +1
     if update.code_review_tentatively_approved?
-      notify channels, "#{update.author_slack_name} has *+1'd* #{update.commit}: needs another set of eyes for *code review*"
+      content = {
+        text: "#{update.author} (@#{update.author_slack_name}) has *+1* your review!",
+        title: "##{update.number}: #{update.commit_without_owner}",
+        color: "good",
+        mrkdwn_in: ["text"]
+      }
+      notify_user update.owner, content
     end
 
     # QA/Product
     if update.qa_approved? && update.product_approved?
-      notify channels, "#{update.author_slack_name} has *QA/Product-approved* #{update.commit}!", ":mj: :victory:"
+      notify_user update.owner, "#{update.author_slack_name} has *QA/Product-approved* #{update.commit}!", ":mj: :victory:"
     elsif update.qa_approved?
-      notify channels, "#{update.author_slack_name} has *QA-approved* #{update.commit}!", ":mj:"
+      notify_user update.owner, "#{update.author_slack_name} has *QA-approved* #{update.commit}!", ":mj:"
     elsif update.product_approved?
-      notify channels, "#{update.author_slack_name} has *Product-approved* #{update.commit}!", ":victory:"
+      notify_user update.owner, "#{update.author_slack_name} has *Product-approved* #{update.commit}!", ":victory:"
     end
 
     # Any minuses (Code/Product/QA)
     if update.minus_1ed? || update.minus_2ed?
-      verb = update.minus_1ed? ? "-1'd" : "-2'd"
-      notify channels, "#{update.author_slack_name} has *#{verb}* #{update.commit}"
+      verb = update.minus_1ed? ? "-1" : "-2"
+      color = update.minus_1ed? ? "warning" : "danger"
+      content = {
+	text: "#{update.author} (@#{update.author_slack_name}) has *#{verb}* your review.\n```#{update.comment} ```",
+        title: "##{update.number}: #{update.commit_without_owner}",
+        color: color,
+	mrkdwn_in: ["text"]
+      }
+      notify_user update.owner, content
+    end
+
+    # New Ref Updated
+    if update.patchset_added? && update.is_new?
+      content = {
+	text: "#{update.uploader} opened a new review!",
+        title: "##{update.number}: #{update.commit_without_owner}",
+        color: "#439FE0",
+	mrkdwn_in: ["text"]
+      }
+      notify channels, content
     end
 
     # New comment added
     if update.comment_added? && update.human? && update.comment != ''
-      notify channels, "#{update.author_slack_name} has left comments on #{update.commit}: \"#{update.comment}\""
+      content = {
+	text: "```#{update.comment}```",
+      	pretext: "#{update.author} (@#{update.author_slack_name}) has posted comments on this change!",
+        title: "##{update.number}: #{update.commit_without_owner}",
+        color: "#4183d7",
+	mrkdwn_in: ["text"]
+      }
+      notify_user update.owner, content
+    end
+
+    # Notify -2 owner on new patchset
+    if update.patchset_added?
+      gerrit_url = YAML.load(File.read('config/gerrit.yml'))['gerrit']['url']
+      uri = URI(gerrit_url+"/changes/#{update.changeID}/detail")
+      response = Net::HTTP.get(uri)
+      response.slice! ")]}'"
+      parsed = JSON.parse(response)
+      if parsed['labels']['Code-Review']['rejected']
+	parsed['labels']['Code-Review']['all'].each do |value|
+	  if value['value'] == -2
+            content = {
+	      text: "#{update.uploader} (@#{update.uploader_slack_name}) has pushed a new patchset! Please review it.",
+              title: "##{update.number}: #{update.commit_without_owner}",
+              color: "#4183d7",
+              mrkdwn_in: ["text"]
+            }
+            notify_user value['username'], content
+	  end
+        end
+      end
     end
 
     # Merged
     if update.merged?
-      notify channels, "#{update.commit} was merged! \\o/", ":yuss: :dancing_cool:"
+      content = {
+	text: "#{update.commit} have been *merged* into #{update.branch}! :champagne:",
+        title: "##{update.number}: #{update.commit_without_owner}",
+        color: "good",
+	mrkdwn_in: ["text"]
+      }
+      notify channels, content
     end
   end
 end
