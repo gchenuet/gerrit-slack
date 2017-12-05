@@ -74,3 +74,13 @@ Run the integration with DEVELOPMENT set to true to see more debug output and to
 ## Running tests
 
     rspec
+
+## Docker
+
+Copy your Gerrit key on `docker/ssh/` and run:
+
+```
+docker build -f docker/Dockerfile
+
+docker run -d [image_id]
+```
