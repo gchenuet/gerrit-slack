@@ -45,15 +45,15 @@ class Update
   end
 
   def build_successful?
-    comment =~ /Build Successful/
+    comment =~ /Succeeded/
   end
 
   def build_failed?
-    comment =~ /Build Failed/
+    comment =~ /Failed/
   end
 
   def build_aborted?
-    comment =~ /ABORTED/
+    comment =~ /Aborted/
   end
 
   def comment
@@ -106,8 +106,17 @@ class Update
     json['change']['subject']
   end
 
+  def zuul_pipeline
+    json['approvals'].each do |value|
+      if json['comment'].include? value['type']
+	 return value['description']
+      end
+    end
+    return nil
+  end
+
   def wip?
-    !!(subject.match /\bwip\b/i)
+    comment =~ /Starting/
   end
 
   def uploader

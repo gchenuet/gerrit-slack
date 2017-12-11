@@ -51,13 +51,15 @@ class GerritNotifier
 
           if @@buffer.size > 0 && !ENV['DEVELOPMENT']
             @@buffer.each do |channel, messages|
-              notifier = Slack::Notifier.new slack_config['token']
-	      notifier.post(attachments: [messages[0]],
-	        channel: channel,
-		username: 'Gerrit',
-		mrkdwn: true,
-		link_names: 1
-	      )
+	      messages.each do |message|
+                notifier = Slack::Notifier.new slack_config['token']
+	        notifier.post(attachments: [message],
+	          channel: channel,
+	          username: 'Gerrit',
+	          mrkdwn: true,
+	          link_names: 1
+	        )
+	      end
             end
           end
 
@@ -97,16 +99,21 @@ class GerritNotifier
     if update.jenkins?
       if update.build_successful? && !update.wip?
         content = {
-          text: "All checks have passed.",
-          title: "##{update.number}: #{update.commit_without_owner}",
+	  text: "*#{update.zuul_pipeline}* pipeline succeeded!",
+	  title: "##{update.number}: #{update.commit_without_owner}",
           color: "good",
           mrkdwn_in: ["text"]
         }
         notify_user update.owner, content
       elsif update.build_failed? && !update.build_aborted?
+	if update.zuul_pipeline == nil
+	  text = "*Merge* Conflict detected, please rebase your review."
+	else
+	  text = "*#{update.zuul_pipeline}* pipeline failed!"
+	end
         content = {
-	  text: "All checks have failed.",
-          title: "##{update.number}: #{update.commit_without_owner}",
+	  text: text,
+	  title: "##{update.number}: #{update.commit_without_owner}",
           color: "danger",
           mrkdwn_in: ["text"]
         }
@@ -117,8 +124,8 @@ class GerritNotifier
     # Code review +2
     if update.code_review_approved?
       content = {
-	text: "#{update.author} (@#{update.author_slack_name}) has *+2* your review!",
-        title: "##{update.number}: #{update.commit_without_owner}",
+	text: "#{update.author} (@#{update.author_slack_name}) has *+2* your review! :clap:",
+	title: "##{update.number}: #{update.commit_without_owner}",
         color: "good",
 	mrkdwn_in: ["text"]
       }
@@ -128,8 +135,8 @@ class GerritNotifier
     # Code review +1
     if update.code_review_tentatively_approved?
       content = {
-        text: "#{update.author} (@#{update.author_slack_name}) has *+1* your review!",
-        title: "##{update.number}: #{update.commit_without_owner}",
+	text: "#{update.author} (@#{update.author_slack_name}) has *+1* your review! :+1:",
+	title: "##{update.number}: #{update.commit_without_owner}",
         color: "good",
         mrkdwn_in: ["text"]
       }
@@ -151,7 +158,7 @@ class GerritNotifier
       color = update.minus_1ed? ? "warning" : "danger"
       content = {
 	text: "#{update.author} (@#{update.author_slack_name}) has *#{verb}* your review.\n```#{update.comment} ```",
-        title: "##{update.number}: #{update.commit_without_owner}",
+	title: "##{update.number}: #{update.commit_without_owner}",
         color: color,
 	mrkdwn_in: ["text"]
       }
@@ -162,7 +169,7 @@ class GerritNotifier
     if update.patchset_added? && update.is_new?
       content = {
 	text: "#{update.uploader} opened a new review!",
-        title: "##{update.number}: #{update.commit_without_owner}",
+	title: "##{update.number}: #{update.commit_without_owner}",
         color: "#439FE0",
 	mrkdwn_in: ["text"]
       }
@@ -170,11 +177,11 @@ class GerritNotifier
     end
 
     # New comment added
-    if update.comment_added? && update.human? && update.comment != ''
+    if update.comment_added? && update.human? && update.comment != '' && update.short_author != update.owner
       content = {
 	text: "```#{update.comment}```",
       	pretext: "#{update.author} (@#{update.author_slack_name}) has posted comments on this change!",
-        title: "##{update.number}: #{update.commit_without_owner}",
+	title: "##{update.number}: #{update.commit_without_owner}",
         color: "#4183d7",
 	mrkdwn_in: ["text"]
       }
@@ -193,7 +200,7 @@ class GerritNotifier
 	  if value['value'] == -2
             content = {
 	      text: "#{update.uploader} (@#{update.uploader_slack_name}) has pushed a new patchset! Please review it.",
-              title: "##{update.number}: #{update.commit_without_owner}",
+	      title: "##{update.number}: #{update.commit_without_owner}",
               color: "#4183d7",
               mrkdwn_in: ["text"]
             }
@@ -206,8 +213,8 @@ class GerritNotifier
     # Merged
     if update.merged?
       content = {
-	text: "#{update.commit} have been *merged* into #{update.branch}! :champagne:",
-        title: "##{update.number}: #{update.commit_without_owner}",
+	text: "#{update.uploader} has *merged* ##{update.number} into *#{update.branch}* branch! :champagne:",
+	title: "##{update.number}: #{update.commit_without_owner}",
         color: "good",
 	mrkdwn_in: ["text"]
       }
